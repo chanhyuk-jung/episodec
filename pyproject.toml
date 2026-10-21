@@ -1,16 +1,31 @@
 [project]
 name = "episodec"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.0.1"
+description = "fast encoding and decoding for robotics data"
 readme = "README.md"
 authors = [
     { name = "chanhyuk-jung", email = "seagullcjung@gmail.com" }
 ]
-requires-python = ">=3.11"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "zarr>=3.2.0",
+    "imagecodecs",
+]
 
-[project.scripts]
-episodec = "episodec:main"
+[project.optional-dependencies]
+tests = [
+    "pytest",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I"
+]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
