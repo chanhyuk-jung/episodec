@@ -1,3 +1,3 @@
-from .zarr import Image, ZarrDecoder, ZarrEncoder
+from .zarr import Image, DatasetReader, DatasetWriter
 
-__all__ = ["ZarrEncoder", "ZarrDecoder", "Image"]
+__all__ = ["DatasetReader", "DatasetWriter", "Image"]

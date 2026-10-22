@@ -67,7 +67,7 @@ def array_keys(root: _zarr.Group) -> set[str]:
     return set(array_keys)
 
 
-class ZarrEncoder:
+class DatasetWriter:
     def __init__(
         self, path: str | os.PathLike, *, shard_size: int = 32, buffer_size: int = 128
     ):
@@ -94,7 +94,7 @@ class ZarrEncoder:
         if self._names != set(data.keys()):
             raise ValueError(f"some keys are missing: {self._names - set(data)}")
 
-    def append(
+    def add(
         self,
         obs: dict[str, NDArray | Image],
         actions: dict[str, NDArray],
@@ -158,6 +158,8 @@ class ZarrEncoder:
         return length
 
     def prune(self) -> None:
+        self.flush()
+
         length = cast(int, self._group.attrs["length"])
 
         for name in self._names:
@@ -167,7 +169,7 @@ class ZarrEncoder:
                 z.resize([length, *z.shape[1:]])
 
 
-class ZarrDecoder:
+class DatasetReader:
     def __init__(self, path: str | os.PathLike):
         root_dir = Path(path)
 

@@ -6,7 +6,7 @@ from imagecodecs import jpeg_decode, jpeg_encode
 from imagecodecs.zarr import Jpeg
 from numpy.typing import NDArray
 
-from .zarr import Image, ZarrDecoder, ZarrEncoder
+from episodec.zarr import Image, DatasetReader, DatasetWriter
 
 N = 8
 seed = 42
@@ -51,7 +51,7 @@ def episodes():
 def test_encode_decode(tmp_path, episodes):
     zarr_path = os.path.join(tmp_path, "fake")
 
-    encoder = ZarrEncoder(zarr_path, shard_size=4, buffer_size=2)
+    encoder = DatasetWriter(zarr_path, shard_size=4, buffer_size=2)
 
     for states, frames, actions, length in episodes:
         for i in range(length):
@@ -63,25 +63,25 @@ def test_encode_decode(tmp_path, episodes):
 
             a_t = {k: v[i] for k, v in actions.items()}
 
-            encoder.append(obs=q_t | I_t, actions=a_t)
+            encoder.add(obs=q_t | I_t, actions=a_t)
 
         encoder.mark_last()
 
     encoder.flush()
 
-    decoder = ZarrDecoder(zarr_path)
+    decoder = DatasetReader(zarr_path)
 
     episode_ends = decoder.get_episode_ends()
     episode_starts = [0, *episode_ends[:-1]]
 
-    for i in range(N):
+    for i, episode in enumerate(episodes):
         s = episode_starts[i]
         e = episode_ends[i]
 
         decoded_obs = decoder.slice_obs(s, e)
         decoded_actions = decoder.slice_actions(s, e)
 
-        states, frames, actions, length = episodes[i]
+        states, frames, actions, length = episode
 
         assert e - s == length
 
