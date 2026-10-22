@@ -6,7 +6,7 @@ from imagecodecs import jpeg_decode, jpeg_encode
 from imagecodecs.zarr import Jpeg
 from numpy.typing import NDArray
 
-from episodec.zarr import Image, DatasetReader, DatasetWriter
+from episodec.zarr import DatasetReader, DatasetWriter, Image
 
 N = 8
 seed = 42
