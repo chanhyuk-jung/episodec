@@ -98,8 +98,6 @@ class ZarrEncoder:
         self,
         obs: dict[str, NDArray | Image],
         actions: dict[str, NDArray],
-        *,
-        last: bool = False,
     ) -> None:
         data = flatten_dict({"observations": obs, "actions": actions})
 
@@ -110,13 +108,15 @@ class ZarrEncoder:
         if len(self._buffer) >= self.buffer_size:
             self.flush()
 
-        if last:
-            self._group.update_attributes({"length": self._length})
+    def mark_last(self):
+        self.flush()
 
-            ends = cast(list[int], self._group.attrs["episode_ends"])
-            ends.append(self._length)
+        self._group.update_attributes({"length": self._length})
 
-            self._group.update_attributes({"episode_ends": ends})
+        ends = cast(list[int], self._group.attrs["episode_ends"])
+        ends.append(self._length)
+
+        self._group.update_attributes({"episode_ends": ends})
 
     def flush(self) -> None:
         if len(self._buffer) == 0:
@@ -221,6 +221,6 @@ class ZarrDecoder:
 
         return data
 
-    def get_eipsode_ends(self) -> list[int]:
+    def get_episode_ends(self) -> list[int]:
         ends = cast(list[int], self._group.attrs.get("episode_ends", []))
         return ends

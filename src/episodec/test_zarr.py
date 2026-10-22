@@ -1,67 +1,103 @@
+import os
+
 import numpy as np
+import pytest
 from imagecodecs import jpeg_decode, jpeg_encode
+from imagecodecs.zarr import Jpeg
+from numpy.typing import NDArray
 
 from .zarr import Image, ZarrDecoder, ZarrEncoder
 
-N = 32
+N = 8
+seed = 42
 
 
-def test_encode_decode(tmp_path):
-    encoder = ZarrEncoder(tmp_path)
+def random_image(
+    length: int, width: int = 64, height: int = 64, channels: int = 3
+) -> NDArray[np.uint8]:
+    x = np.random.rand(length, height, width, channels) * 255
+    img = x.astype(np.uint8)
+    return img
 
-    all_obs = []
-    all_actions = []
+
+@pytest.fixture
+def episodes():
+    episodes = []
 
     for _ in range(N):
-        obs = {}
-        obs["qpos"] = np.random.randn(7)
+        length = np.random.randint(low=4, high=16)
+        print(length)
 
-        img = np.random.rand(64, 64, 3) * 255
-        img = img.astype(np.uint8)
-        obs["img"] = img
+        episode = (
+            {
+                "qpos": np.random.randn(length, 7),
+                "qvel": np.random.randn(length, 7),
+            },
+            {
+                "front_img": random_image(length),
+                "wrist_img": random_image(length),
+            },
+            {
+                "qpos": np.random.randn(length, 7),
+            },
+            length,
+        )
 
-        all_obs.append(obs)
+        episodes.append(episode)
 
-        actions = {}
-        actions["qpos"] = np.random.randn(7)
+    return tuple(episodes)
 
-        all_actions.append(actions)
 
-    for i, (o, a) in enumerate(zip(all_obs, all_actions)):
-        obs = {}
-        for k, v in o.items():
-            if k == "img":
-                obs[k] = Image.from_array(v)
-                continue
+def test_encode_decode(tmp_path, episodes):
+    zarr_path = os.path.join(tmp_path, "fake")
 
-            obs[k] = v
+    encoder = ZarrEncoder(zarr_path, shard_size=4, buffer_size=2)
 
-        if (i + 1) % (N // 4) == 0:
-            encoder.append(obs, a, last=True)
-        else:
-            encoder.append(obs, a)
+    for states, frames, actions, length in episodes:
+        for i in range(length):
+            q_t = {k: v[i] for k, v in states.items()}
+            I_t = {
+                k: Image.from_array(v[i], codec=Jpeg(level=90))
+                for k, v in frames.items()
+            }
+
+            a_t = {k: v[i] for k, v in actions.items()}
+
+            encoder.append(obs=q_t | I_t, actions=a_t)
+
+        encoder.mark_last()
 
     encoder.flush()
 
-    decoder = ZarrDecoder(tmp_path)
+    decoder = ZarrDecoder(zarr_path)
+
+    episode_ends = decoder.get_episode_ends()
+    episode_starts = [0, *episode_ends[:-1]]
 
     for i in range(N):
-        dec_obs, dec_actions = decoder[i]
+        s = episode_starts[i]
+        e = episode_ends[i]
 
-        o = all_obs[i]
-        a = all_actions[i]
+        decoded_obs = decoder.slice_obs(s, e)
+        decoded_actions = decoder.slice_actions(s, e)
 
-        for k in o.keys():
-            if k == "img":
-                img = o[k]
+        states, frames, actions, length = episodes[i]
 
+        assert e - s == length
+
+        for k, v in states.items():
+            np.testing.assert_allclose(decoded_obs[k], v)
+
+        for k, v in frames.items():
+            frames = []
+            for img in v:
                 buf = jpeg_encode(img, level=90)
                 img = jpeg_decode(buf)
+                frames.append(img)
 
-                np.testing.assert_allclose(dec_obs[k], img)
-                continue
+            frames = np.stack(frames)
 
-            np.testing.assert_allclose(dec_obs[k], o[k])
+            np.testing.assert_allclose(decoded_obs[k], frames)
 
-        for k in a.keys():
-            np.testing.assert_allclose(dec_actions[k], a[k])
+        for k, v in actions.items():
+            np.testing.assert_allclose(decoded_actions[k], v)
